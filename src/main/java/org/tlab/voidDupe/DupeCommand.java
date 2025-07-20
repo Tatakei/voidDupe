@@ -10,6 +10,7 @@ import org.bukkit.inventory.meta.BundleMeta;
 import org.bukkit.block.ShulkerBox;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 public class DupeCommand implements CommandExecutor {
@@ -36,7 +37,6 @@ public class DupeCommand implements CommandExecutor {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-
         if (!(sender instanceof Player player)) {
             sender.sendMessage("Only players can use this command.");
             return true;
@@ -47,21 +47,22 @@ public class DupeCommand implements CommandExecutor {
             return true;
         }
 
-        if (args.length != 1) {
+        int requestedAmount = 1; // default to 1
+        if (args.length > 1) {
             player.sendMessage(voiddupemain + ChatColor.GREEN + "Usage: /dupe <amount>");
             return true;
         }
-
-        int requestedAmount;
-        try {
-            requestedAmount = Integer.parseInt(args[0]);
-            if (requestedAmount <= 0) {
-                player.sendMessage(voiddupemain + ChatColor.RED + "Amount must be a positive number.");
+        if (args.length == 1) {
+            try {
+                requestedAmount = Integer.parseInt(args[0]);
+                if (requestedAmount <= 0) {
+                    player.sendMessage(voiddupemain + ChatColor.RED + "Amount must be a positive number.");
+                    return true;
+                }
+            } catch (NumberFormatException e) {
+                player.sendMessage(voiddupemain + ChatColor.RED + "Invalid number.");
                 return true;
             }
-        } catch (NumberFormatException e) {
-            player.sendMessage(voiddupemain + ChatColor.RED + "Invalid number.");
-            return true;
         }
 
         int maxDupeAmount = VoidDupe.getInstance().getConfig().getInt("max-dupe-amount", 5);
@@ -78,7 +79,6 @@ public class DupeCommand implements CommandExecutor {
 
         Material itemType = item.getType();
         List<String> blacklistRaw = VoidDupe.getInstance().getConfig().getStringList("blacklisted-items");
-
         List<Material> blacklist = blacklistRaw.stream()
                 .map(String::toUpperCase)
                 .map(name -> {
@@ -92,7 +92,7 @@ public class DupeCommand implements CommandExecutor {
                 .collect(Collectors.toList());
 
         if (blacklist.contains(itemType)) {
-            player.sendMessage(voiddupemain + ChatColor.RED + "You are not allowed to duplicate the held item");
+            player.sendMessage(voiddupemain + ChatColor.RED + "You are not allowed to duplicate the held item.");
             return true;
         }
 
@@ -101,11 +101,34 @@ public class DupeCommand implements CommandExecutor {
             return true;
         }
 
-        ItemStack clone = item.clone();
-        clone.setAmount(Math.min(clone.getMaxStackSize(), clone.getAmount()));
+        int originalAmount = item.getAmount();
+        int maxDupedAmount = 384;
 
-        for (int i = 0; i < requestedAmount; i++) {
-            player.getInventory().addItem(clone);
+        int doublingFactor = (int) Math.pow(2, requestedAmount);
+        int doubledAmount = originalAmount * doublingFactor;
+        if (doubledAmount > maxDupedAmount) {
+            doubledAmount = maxDupedAmount;
+        }
+
+        int toGive = doubledAmount - originalAmount;
+        if (toGive <= 0) {
+            player.sendMessage(voiddupemain + ChatColor.RED + "Nothing to duplicate.");
+            return true;
+        }
+
+        int maxStackSize = item.getMaxStackSize();
+
+        while (toGive > 0) {
+            int giveAmount = Math.min(toGive, maxStackSize);
+            ItemStack clone = item.clone();
+            clone.setAmount(giveAmount);
+
+            Map<Integer, ItemStack> leftovers = player.getInventory().addItem(clone);
+            if (!leftovers.isEmpty()) {
+                player.sendMessage(voiddupemain + ChatColor.RED + "Not enough inventory space to dupe all items.");
+                break;
+            }
+            toGive -= giveAmount;
         }
 
         player.sendMessage(voiddupemain + ChatColor.GREEN + "Your item has been duped " + ChatColor.WHITE + requestedAmount + ChatColor.GREEN + " times.");

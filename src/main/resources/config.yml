@@ -1,0 +1,10 @@
+dupe-amount: 5
+
+blacklisted-items:
+  - BEDROCK
+  - COMMAND_BLOCK
+  - BARRIER
+  - STRUCTURE_BLOCK
+  - ENDER_PORTAL_FRAME
+  - NETHERITE_CHESTPLATE
+  - BAMBOO

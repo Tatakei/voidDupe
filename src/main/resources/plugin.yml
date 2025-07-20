@@ -1,0 +1,12 @@
+name: VoidDupe
+version: '1.0'
+main: org.tlab.voidDupe.VoidDupe
+api-version: '1.21'
+authors: [ TLab ]
+description: Dupe Plugin for thevoiddupe Minehut Server
+website: tlabworks.com
+commands:
+  dupe:
+    description: Duplicate the item in your hand
+    usage: /dupe
+    permission: dupe.use

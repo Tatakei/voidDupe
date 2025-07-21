@@ -2,36 +2,87 @@ package org.tlab.voidDupe;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.command.*;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.*;
 import org.bukkit.inventory.meta.BlockStateMeta;
 import org.bukkit.inventory.meta.BundleMeta;
 import org.bukkit.block.ShulkerBox;
+import org.bukkit.inventory.meta.ItemMeta;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class DupeCommand implements CommandExecutor {
     private static final String voiddupemain = ChatColor.DARK_GRAY + "[" + ChatColor.LIGHT_PURPLE + "Void" + ChatColor.DARK_PURPLE + "Dupe" + ChatColor.DARK_GRAY + "] " + ChatColor.GRAY + "| ";
 
-    private boolean containsBlacklistedItems(ItemStack container, List<Material> blacklist) {
+    private static final Map<Enchantment, Integer> ILLEGAL_ENCHANTMENTS;
+
+    static {
+        Map<Enchantment, Integer> map = new HashMap<>();
+        putEnchantment(map, "sharpness", 6);
+        putEnchantment(map, "efficiency", 8);
+        putEnchantment(map, "unbreaking", 4);
+        putEnchantment(map, "protection", 6);
+        putEnchantment(map, "blast_protection", 6);
+        putEnchantment(map, "depth_strider", 4);
+        putEnchantment(map, "density", 6);
+        putEnchantment(map, "breach", 5);
+        ILLEGAL_ENCHANTMENTS = Collections.unmodifiableMap(map);
+    }
+
+    private static void putEnchantment(Map<Enchantment, Integer> map, String key, int minLevel) {
+        Enchantment enchant = Enchantment.getByKey(NamespacedKey.minecraft(key));
+        if (enchant != null) {
+            map.put(enchant, minLevel);
+        }
+    }
+
+    private static final Set<Material> DYES = Arrays.stream(Material.values())
+            .filter(m -> m.name().endsWith("_DYE"))
+            .collect(Collectors.toSet());
+
+    private boolean containsBlacklistedItems(ItemStack container, List<Material> materialBlacklist) {
         if (container.getItemMeta() instanceof BlockStateMeta meta) {
             if (meta.getBlockState() instanceof ShulkerBox shulker) {
                 for (ItemStack content : shulker.getInventory().getContents()) {
-                    if (content != null && blacklist.contains(content.getType())) {
+                    if (content != null && (materialBlacklist.contains(content.getType()) || hasIllegalEnchantments(content))) {
                         return true;
                     }
                 }
             }
         } else if (container.getItemMeta() instanceof BundleMeta bundleMeta) {
             for (ItemStack content : bundleMeta.getItems()) {
-                if (content != null && blacklist.contains(content.getType())) {
+                if (content != null && (materialBlacklist.contains(content.getType()) || hasIllegalEnchantments(content))) {
                     return true;
                 }
             }
         }
+        return false;
+    }
+
+    private boolean hasIllegalEnchantments(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+
+        ItemMeta meta = item.getItemMeta();
+        Map<Enchantment, Integer> enchants = meta.getEnchants();
+
+        for (Map.Entry<Enchantment, Integer> entry : enchants.entrySet()) {
+            Enchantment enchantment = entry.getKey();
+            int level = entry.getValue();
+            if (ILLEGAL_ENCHANTMENTS.containsKey(enchantment) && level >= ILLEGAL_ENCHANTMENTS.get(enchantment)) {
+                return true;
+            }
+        }
+
+        Enchantment unbreaking = Enchantment.getByKey(NamespacedKey.minecraft("unbreaking"));
+        if (DYES.contains(item.getType()) && unbreaking != null &&
+                enchants.getOrDefault(unbreaking, 0) == 1) {
+            return true;
+        }
+
         return false;
     }
 
@@ -47,7 +98,7 @@ public class DupeCommand implements CommandExecutor {
             return true;
         }
 
-        int requestedAmount = 1; // default to 1
+        int requestedAmount = 1;
         if (args.length > 1) {
             player.sendMessage(voiddupemain + ChatColor.GREEN + "Usage: /dupe <amount>");
             return true;
@@ -88,7 +139,7 @@ public class DupeCommand implements CommandExecutor {
                         return null;
                     }
                 })
-                .filter(m -> m != null)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
 
         if (blacklist.contains(itemType)) {
@@ -96,8 +147,13 @@ public class DupeCommand implements CommandExecutor {
             return true;
         }
 
+        if (hasIllegalEnchantments(item)) {
+            player.sendMessage(voiddupemain + ChatColor.RED + "This item contains illegal enchantments and cannot be duplicated.");
+            return true;
+        }
+
         if (containsBlacklistedItems(item, blacklist)) {
-            player.sendMessage(ChatColor.RED + "You can't duplicate this container: it contains blacklisted items.");
+            player.sendMessage(voiddupemain + ChatColor.RED + "You can't duplicate this container: it contains blacklisted or illegal items.");
             return true;
         }
 

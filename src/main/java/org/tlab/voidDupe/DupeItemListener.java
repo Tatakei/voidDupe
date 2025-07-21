@@ -33,7 +33,7 @@ public class DupeItemListener implements Listener {
                 .filter(m -> m != null)
                 .collect(Collectors.toList());
 
-        if (blacklist.contains(item.getType())) {
+        if (blacklist.contains(item.getType()) || ItemCheckUtil.hasIllegalEnchantments(item)) {
             addUndupeableLore(item);
         }
     }
